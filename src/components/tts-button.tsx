@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Volume2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Pause, Play, Square, Volume2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { speak, stop, isTTSSupported, isSpeaking } from '@/utils/tts'
+import { isTTSSupported, pause, resume, speak, stop } from '@/utils/tts'
 
 interface TTSButtonProps {
   text: string
@@ -14,12 +14,8 @@ interface TTSButtonProps {
   className?: string
 }
 
-/**
- * Reusable Text-to-Speech button component
- * 
- * Provides safe, accessible TTS playback using browser-native Web Speech API.
- * Gracefully disables if TTS is not supported.
- */
+type PlaybackState = 'idle' | 'playing' | 'paused'
+
 export function TTSButton({
   text,
   label = 'Listen',
@@ -28,96 +24,184 @@ export function TTSButton({
   size = 'sm',
   className = '',
 }: TTSButtonProps) {
-  const [isPlaying, setIsPlaying] = useState(false)
-  // Initialize support check using useState initializer to avoid setState in effect
-  const [supported] = useState(() => isTTSSupported())
-  const monitoringRef = useRef(false)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [playbackState, setPlaybackState] = useState<PlaybackState>('idle')
+  const [supported, setSupported] = useState(false)
+  const isMountedRef = useRef(false)
+  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const fullTextRef = useRef('')
 
-  // Monitor speech state only when we expect speech to be playing
   useEffect(() => {
-    if (!supported) return
+    isMountedRef.current = true
 
-    // Only start monitoring if we think speech is playing
-    if (isPlaying && !monitoringRef.current) {
-      monitoringRef.current = true
-      
-      intervalRef.current = setInterval(() => {
-        const currentlySpeaking = isSpeaking()
-        
-        if (!currentlySpeaking && isPlaying) {
-          // Speech ended, stop monitoring
-          setIsPlaying(false)
-          monitoringRef.current = false
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current)
-            intervalRef.current = null
-          }
-        }
-      }, 200) // Reduced frequency to 200ms to reduce re-renders
-    }
+    const timeoutId = window.setTimeout(() => {
+      setSupported(isTTSSupported())
+    }, 0)
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-      monitoringRef.current = false
-    }
-  }, [supported, isPlaying])
+      isMountedRef.current = false
+      window.clearTimeout(timeoutId)
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (isPlaying) {
+      if (currentUtteranceRef.current) {
         stop()
+        currentUtteranceRef.current = null
       }
     }
-  }, [isPlaying])
+  }, [])
 
-  const handleClick = () => {
-    if (!supported || !text || text.trim().length === 0) return
+  const resetPlayback = () => {
+    currentUtteranceRef.current = null
+    fullTextRef.current = ''
+    setPlaybackState('idle')
+  }
 
-    if (isPlaying) {
-      // If playing, stop it
-      stop()
-      setIsPlaying(false)
-      monitoringRef.current = false
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-    } else {
-      // Start speaking
-      speak(text, lang)
-      
-      // Update state after a brief delay to account for speech start
-      setTimeout(() => {
-        const speaking = isSpeaking()
-        setIsPlaying(speaking)
-        if (speaking) {
-          monitoringRef.current = true
-        }
-      }, 150)
+  const finishPlayback = (utterance: SpeechSynthesisUtterance) => {
+    if (!isMountedRef.current || currentUtteranceRef.current !== utterance) return
+
+    resetPlayback()
+  }
+
+  const startSegmentPlayback = (startIndex = 0) => {
+    const fullText = text.trim()
+    if (!supported || fullText.length === 0) return null
+
+    fullTextRef.current = fullText
+
+    const boundedStartIndex = Math.max(0, Math.min(startIndex, fullText.length - 1))
+    const rawSegment = fullText.slice(boundedStartIndex)
+    const leadingWhitespaceLength = rawSegment.length - rawSegment.trimStart().length
+    const segmentOffset = boundedStartIndex + leadingWhitespaceLength
+    const segmentText = fullText.slice(segmentOffset)
+
+    if (segmentText.length === 0) return null
+
+    let startedUtterance: SpeechSynthesisUtterance | null = null
+    const utterance = speak(segmentText, lang, {
+      onBoundary: () => {
+        if (!startedUtterance || currentUtteranceRef.current !== startedUtterance) return
+      },
+      onEnd: () => {
+        if (!isMountedRef.current || !startedUtterance) return
+        finishPlayback(startedUtterance)
+      },
+      onError: () => {
+        if (!isMountedRef.current || !startedUtterance) return
+        finishPlayback(startedUtterance)
+      },
+    })
+
+    if (!utterance) return null
+
+    startedUtterance = utterance
+    currentUtteranceRef.current = utterance
+    setPlaybackState('playing')
+
+    return utterance
+  }
+
+  const startPlayback = () => {
+    const utterance = startSegmentPlayback(0)
+    if (!utterance) {
+      resetPlayback()
     }
   }
 
-  // Disable if not supported or no text
+  const pausePlayback = () => {
+    if (!currentUtteranceRef.current) return
+
+    pause()
+    setPlaybackState('paused')
+  }
+
+  const resumePlayback = () => {
+    if (!currentUtteranceRef.current) return
+
+    resume()
+    setPlaybackState('playing')
+  }
+
+  const stopPlayback = () => {
+    stop()
+    resetPlayback()
+  }
+
   const disabled = !supported || !text || text.trim().length === 0
 
+  if (playbackState === 'playing') {
+    return (
+      <div className={`flex flex-wrap gap-2 ${className}`}>
+        <Button
+          variant={variant}
+          size={size}
+          onClick={pausePlayback}
+          disabled={disabled}
+          aria-label="Пауза"
+          type="button"
+          title="Поставить чтение на паузу"
+        >
+          <Pause className="h-4 w-4" />
+          {size !== 'icon' && <span className="ml-2">Пауза</span>}
+        </Button>
+        <Button
+          variant="outline"
+          size={size}
+          onClick={stopPlayback}
+          disabled={disabled}
+          aria-label="Остановить"
+          type="button"
+          title="Остановить чтение"
+        >
+          <Square className="h-4 w-4" />
+          {size !== 'icon' && <span className="ml-2">Стоп</span>}
+        </Button>
+      </div>
+    )
+  }
+
+  if (playbackState === 'paused') {
+    return (
+      <div className={`flex flex-wrap gap-2 ${className}`}>
+        <Button
+          variant={variant}
+          size={size}
+          onClick={resumePlayback}
+          disabled={disabled}
+          aria-label="Продолжить"
+          type="button"
+          title="Продолжить чтение"
+        >
+          <Play className="h-4 w-4" />
+          {size !== 'icon' && <span className="ml-2">Продолжить</span>}
+        </Button>
+        <Button
+          variant="outline"
+          size={size}
+          onClick={stopPlayback}
+          disabled={disabled}
+          aria-label="Остановить"
+          type="button"
+          title="Остановить чтение"
+        >
+          <Square className="h-4 w-4" />
+          {size !== 'icon' && <span className="ml-2">Стоп</span>}
+        </Button>
+      </div>
+    )
+  }
+
   return (
-    <Button
-      variant={variant}
-      size={size}
-      onClick={handleClick}
-      disabled={disabled}
-      className={className}
-      aria-label={label}
-      type="button"
-      title={!disabled ? 'Listen to correct pronunciation' : undefined}
-    >
-      <Volume2 className={`h-4 w-4 ${isPlaying ? 'animate-pulse' : ''}`} />
-      {size !== 'icon' && <span className="ml-2">{label}</span>}
-    </Button>
+    <div className={`flex flex-wrap gap-2 ${className}`}>
+      <Button
+        variant={variant}
+        size={size}
+        onClick={startPlayback}
+        disabled={disabled}
+        aria-label={label}
+        type="button"
+      title={!disabled ? 'Прослушать исходный текст' : undefined}
+      >
+        <Volume2 className="h-4 w-4" />
+        {size !== 'icon' && <span className="ml-2">{label}</span>}
+      </Button>
+    </div>
   )
 }

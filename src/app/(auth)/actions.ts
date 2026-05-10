@@ -133,14 +133,12 @@ export async function signup(prevState: SignupState, formData: FormData, role: '
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
-  // Validate full name
   const fullNameValidation = fullNameSchema.safeParse(fullNameRaw)
   if (!fullNameValidation.success) {
     return { error: fullNameValidation.error.issues[0]?.message || 'Неверное имя' }
   }
   const fullName = fullNameValidation.data
 
-  // Sign up with role in metadata
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email: email,
     password: password,
@@ -153,7 +151,6 @@ export async function signup(prevState: SignupState, formData: FormData, role: '
   })
 
   if (authError) {
-    // Translate common error messages to Russian
     let errorMessage = authError.message
     if (authError.message.includes('User already registered')) {
       errorMessage = 'Пользователь с таким email уже зарегистрирован'
@@ -165,9 +162,6 @@ export async function signup(prevState: SignupState, formData: FormData, role: '
     return { error: errorMessage }
   }
 
-  // Create or update profile entry in profiles table
-  // Use upsert to handle cases where profile might already exist (e.g., from a database trigger)
-  // Store email for easier lookup when teachers add students to groups
   if (authData.user) {
     const { error: profileError } = await supabase
       .from('profiles')
@@ -176,7 +170,7 @@ export async function signup(prevState: SignupState, formData: FormData, role: '
           id: authData.user.id,
           full_name: fullName,
           role: role,
-          email: email, // Store email for group member lookup
+          email: email,
         },
         {
           onConflict: 'id',
@@ -184,9 +178,7 @@ export async function signup(prevState: SignupState, formData: FormData, role: '
       )
 
     if (profileError) {
-      // If upsert fails, try update (profile might exist from trigger)
       if (profileError.code === '23505') {
-        // Profile exists, update it instead
         const { error: updateError } = await supabase
           .from('profiles')
           .update({ full_name: fullName, role: role, email: email })
@@ -194,15 +186,21 @@ export async function signup(prevState: SignupState, formData: FormData, role: '
 
         if (updateError) {
           console.error('Error updating profile:', updateError)
-          // Don't fail signup - profile exists, just might have stale data
         }
       } else {
-        // Unexpected error
         console.error('Error creating/updating profile:', profileError)
-        // Don't fail signup - auth user is created, profile can be fixed later
       }
     }
   }
 
   return { success: true }
 }
+
+/*
+ * ملخص الملف:
+ * - يسجل users جدد بـ email/password.
+ * - يكمل Google OAuth flow.
+ * - يحفظ role في profiles.
+ * - يعتمد على Supabase Auth وprofiles table.
+ * - يرجع errors مفهومة للواجهة أو يعمل redirects مناسبة.
+ */

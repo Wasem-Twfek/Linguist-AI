@@ -1,11 +1,14 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { SmartBackButton } from '@/components/smart-back-button'
 
 export default function NotFound() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-900 dark:to-zinc-800 p-4">
-      <Card className="w-full max-w-md">
+      <div className="flex w-full max-w-md flex-col gap-3">
+        <SmartBackButton fallbackHref="/" label="Назад на главную" className="self-start" />
+        <Card className="w-full">
         <CardHeader className="text-center">
           <CardTitle className="text-4xl font-bold">404</CardTitle>
           <CardDescription className="text-lg">
@@ -25,7 +28,8 @@ export default function NotFound() {
             </Button>
           </div>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   )
 }

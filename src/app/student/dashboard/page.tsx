@@ -1,23 +1,25 @@
-import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
-import { DashboardHeader } from '@/components/dashboard-header'
+
 import { AuthGuard } from '@/components/auth-guard'
-import { getStudentAssignments } from './actions'
+import { SmartBackButton } from '@/components/smart-back-button'
+import { DashboardHeader } from '@/components/dashboard-header'
+import { createClient } from '@/utils/supabase/server'
+import { getStudentAssignments, getStudentSubmissionHistory } from './data-actions'
 import { StudentDashboardClient } from './student-dashboard-client'
 
-// Prevent caching of protected pages - forces server-side rendering on every request
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function StudentDashboard() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   if (!user) {
     redirect('/login')
   }
 
-  // Verify student role - prevent teachers from accessing student routes
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
@@ -25,24 +27,29 @@ export default async function StudentDashboard() {
     .single()
 
   if (profile?.role !== 'student') {
-    // Redirect teachers to their dashboard
     if (profile?.role === 'teacher') {
       redirect('/teacher/dashboard')
     }
-    // If role is missing/null, redirect to login
+
     redirect('/login')
   }
 
-  const { assignments, error } = await getStudentAssignments()
+  const [{ assignments, error }, { submissions, error: submissionsError }] = await Promise.all([
+    getStudentAssignments(),
+    getStudentSubmissionHistory(),
+  ])
 
   if (error) {
     console.error('Error loading assignments:', error)
   }
 
-  // Fetch full profile for banner check
+  if (submissionsError) {
+    console.error('Error loading submission history:', submissionsError)
+  }
+
   const { data: fullProfile } = await supabase
     .from('profiles')
-    .select('full_name')
+    .select('full_name, email')
     .eq('id', user.id)
     .single()
 
@@ -50,20 +57,26 @@ export default async function StudentDashboard() {
 
   return (
     <AuthGuard requiredRole="student">
-      <div className="min-h-screen bg-background">
+      <div className="app-light min-h-screen bg-background text-foreground">
         <DashboardHeader />
         <main className="container mx-auto px-4 py-8">
+          <SmartBackButton fallbackHref="/" label="Назад на главную" className="mb-6" />
           {needsName && (
-            <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-              <p className="text-sm text-amber-800 dark:text-amber-200">
-                <a href="/settings/profile" className="underline font-medium">
+            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-soft">
+              <p className="text-sm text-amber-800">
+                <a href="/settings/profile" className="font-medium underline">
                   Заполните имя профиля
-                </a>
-                {' '}для лучшей идентификации
+                </a>{' '}
+                для лучшей идентификации
               </p>
             </div>
           )}
-          <StudentDashboardClient initialAssignments={assignments} />
+          <StudentDashboardClient
+            initialAssignments={assignments}
+            initialSubmissionHistory={submissions}
+            studentName={fullProfile?.full_name ?? null}
+            studentEmail={fullProfile?.email ?? user.email ?? null}
+          />
         </main>
       </div>
     </AuthGuard>

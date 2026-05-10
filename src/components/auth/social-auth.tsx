@@ -52,7 +52,7 @@ export function SocialAuth() {
         type="button"
         onClick={startGoogle}
         disabled={loading}
-        className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-zinc-200 bg-white text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-blue-100 bg-white text-sm font-semibold text-slate-800 shadow-soft transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-slate-950 disabled:cursor-not-allowed disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden>
           <path

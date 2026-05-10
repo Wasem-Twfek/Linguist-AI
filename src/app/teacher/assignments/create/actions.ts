@@ -16,13 +16,16 @@ export async function createAssignment(data: {
     return { error: 'Необходима авторизация' }
   }
 
-  // Check if user is a teacher
-  const role = user.user_metadata?.role
-  if (role !== 'teacher') {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'teacher') {
     return { error: 'Только учителя могут создавать задания' }
   }
 
-  // Validate all fields
   if (!data.groupId || !data.title || !data.type || !data.textContent) {
     return { error: 'Все поля обязательны для заполнения' }
   }

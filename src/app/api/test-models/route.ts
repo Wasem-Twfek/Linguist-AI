@@ -1,25 +1,56 @@
 import { NextResponse } from 'next/server'
 
+import { createClient } from '@/utils/supabase/server'
+
+const DIAGNOSTIC_ROUTE_UNAVAILABLE = 'Диагностический маршрут недоступен.'
+
+function unavailable(status = 404) {
+  return NextResponse.json(
+    { error: DIAGNOSTIC_ROUTE_UNAVAILABLE },
+    { status }
+  )
+}
+
 export async function GET() {
+  if (process.env.NODE_ENV !== 'development') {
+    return unavailable()
+  }
+
   try {
-    const apiKey = process.env.GOOGLE_API_KEY
-    if (!apiKey) {
-      throw new Error(
-        'Missing environment variable: GOOGLE_API_KEY. ' +
-        'Please set it in your .env.local file. ' +
-        'Get your API key from https://aistudio.google.com/app/apikey'
-      )
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return unavailable()
     }
 
-    console.log('Fetching available models from Google API...')
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (profile?.role !== 'teacher') {
+      return unavailable()
+    }
+
+    const apiKey = process.env.GOOGLE_API_KEY
+    if (!apiKey) {
+      console.error('Diagnostic model route is missing GOOGLE_API_KEY.')
+      return unavailable(500)
+    }
+
     const listModelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
     const listResponse = await fetch(listModelsUrl)
 
     if (!listResponse.ok) {
-      return NextResponse.json(
-        { error: `Failed to list models: ${listResponse.status} ${listResponse.statusText}` },
-        { status: listResponse.status }
-      )
+      console.error('Diagnostic model route failed to list models:', {
+        status: listResponse.status,
+        statusText: listResponse.statusText,
+      })
+      return unavailable(502)
     }
 
     const listData = await listResponse.json() as {
@@ -31,7 +62,6 @@ export async function GET() {
       }>
     }
 
-    // Format models for display
     const models = listData.models?.map((m) => ({
       name: m.name || 'N/A',
       displayName: m.displayName || 'N/A',
@@ -39,7 +69,6 @@ export async function GET() {
       description: m.description || 'N/A',
     })) || []
 
-    // Find models that support generateContent
     const supportedModels = models.filter((m) =>
       m.supportedMethods.includes('generateContent')
     )
@@ -53,11 +82,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Error listing models:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Failed to list models'
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    )
+    return unavailable(500)
   }
 }
 

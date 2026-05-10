@@ -10,6 +10,7 @@ import { submitAttempt } from '@/app/student/assignments/[id]/actions'
 
 interface AudioRecorderProps {
   assignmentId: string
+  // Server re-reads original text from the database for validation.
   originalText: string
 }
 
@@ -30,20 +31,30 @@ export function AudioRecorder({ assignmentId, originalText }: AudioRecorderProps
   const streamRef = useRef<MediaStream | null>(null)
   const isMountedRef = useRef(true)
 
-  // Format time as MM:SS
   function formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  // Start recording
   async function startRecording() {
+    if (recordingState === 'recording' || submitting) return
+
     setError(null)
     chunksRef.current = []
 
     try {
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        setError('Браузер не поддерживает запись аудио')
+        return
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (!isMountedRef.current) {
+        stream.getTracks().forEach(track => track.stop())
+        return
+      }
+
       streamRef.current = stream
 
       const mediaRecorder = new MediaRecorder(stream)
@@ -57,38 +68,41 @@ export function AudioRecorder({ assignmentId, originalText }: AudioRecorderProps
 
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop())
+          streamRef.current = null
+        }
+
+        mediaRecorderRef.current = null
+
+        if (!isMountedRef.current) return
+
         const url = URL.createObjectURL(blob)
         setAudioBlob(blob)
         setAudioUrl(url)
         setRecordingState('finished')
-
-        // Stop all tracks
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop())
-        }
       }
 
       mediaRecorder.start()
       setRecordingState('recording')
       setElapsedTime(0)
 
-      // Start timer
       timerRef.current = setInterval(() => {
         setElapsedTime(prev => prev + 1)
       }, 1000)
 
     } catch (err) {
       console.error('Error starting recording:', err)
+      if (!isMountedRef.current) return
       setError('Не удалось получить доступ к микрофону')
     }
   }
 
-  // Stop recording
   function stopRecording() {
     if (mediaRecorderRef.current && recordingState === 'recording') {
       mediaRecorderRef.current.stop()
       
-      // Clear timer
       if (timerRef.current) {
         clearInterval(timerRef.current)
         timerRef.current = null
@@ -96,7 +110,6 @@ export function AudioRecorder({ assignmentId, originalText }: AudioRecorderProps
     }
   }
 
-  // Reset and start over
   function rerecord() {
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl)
@@ -108,124 +121,128 @@ export function AudioRecorder({ assignmentId, originalText }: AudioRecorderProps
     setError(null)
   }
 
-  // Submit recording
   async function handleSubmit() {
     if (!audioBlob) {
       toast.error('Нет аудио для отправки')
       return
     }
 
-    // Client-side validation before submitting
     if (audioBlob.size === 0) {
       toast.error('Аудио файл пуст. Пожалуйста, запишите аудио снова.')
       return
     }
 
-    // Validate minimum duration client-side (user feedback)
     if (elapsedTime < 3) {
       toast.error('Запись слишком короткая. Минимальная длительность: 3 секунды.')
       return
     }
 
     setSubmitting(true)
+    setError(null)
 
     try {
-      // Pass duration to server for validation
       const result = await submitAttempt(assignmentId, audioBlob, originalText, elapsedTime)
 
-      // Check if component is still mounted before updating state
       if (!isMountedRef.current) return
 
       if (result?.error) {
         toast.error(result.error)
         setSubmitting(false)
-        // Don't redirect on error - let user try again
         return
       }
 
-      // Only show success and redirect if we got a valid result
       if (result?.success) {
-      toast.success('Результат сохранен!')
+        toast.success('Результат сохранен!')
       
-        // Signal student dashboard to refresh (same-tab only)
         if (typeof window !== 'undefined') {
           localStorage.setItem('student-assignments-updated', Date.now().toString())
-          // Also trigger storage event for same-tab updates
+          // Manually dispatch storage event for same-tab listeners.
           window.dispatchEvent(new StorageEvent('storage', {
             key: 'student-assignments-updated',
             newValue: Date.now().toString()
           }))
         }
       
-        // Redirect immediately to prevent state updates after navigation
-        router.push('/student/dashboard')
-        // Don't update state after redirect starts
+        const reportHref =
+          'resultId' in result && result.resultId
+            ? `/student/results/${result.resultId}`
+            : '/student/dashboard'
+
+        router.push(reportHref)
         return
       } else {
-        // Unexpected state - error should have been set
-        toast.error('Произошла ошибка при отправке')
+        toast.error('Не удалось выполнить анализ. Попробуйте еще раз.')
         setSubmitting(false)
       }
 
     } catch (err) {
       console.error('Error submitting:', err)
-      // Only update state if component is still mounted
       if (isMountedRef.current) {
-      toast.error('Произошла ошибка при отправке')
-      setSubmitting(false)
+        toast.error('Не удалось выполнить анализ. Попробуйте еще раз.')
+        setSubmitting(false)
       }
     }
   }
 
-  // Cleanup on unmount (prevents orphaned recordings if user navigates away)
   useEffect(() => {
     isMountedRef.current = true
     return () => {
       isMountedRef.current = false
-      // If user navigates away during recording or before submitting,
-      // cleanup resources. The recording is not submitted, so no session/result is created.
       if (timerRef.current) {
         clearInterval(timerRef.current)
+        timerRef.current = null
       }
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl)
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop()
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
       }
-      // Note: If recording was in progress, it won't be submitted
-      // If audioBlob exists but wasn't submitted, it's discarded on unmount
-      // This is safe - no server-side cleanup needed since nothing was created
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+      }
     }
   }, [audioUrl])
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
-        <CardTitle className="text-lg">Запись аудио</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Mic className="h-5 w-5 text-accent" />
+          Запись аудио
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && (
-          <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded-md">
-            <p className="text-red-800 dark:text-red-200 text-sm">{error}</p>
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-3">
+            <p className="text-sm text-red-800">{error}</p>
           </div>
         )}
 
-        {/* Idle State */}
         {recordingState === 'idle' && (
           <div className="flex flex-col items-center gap-4 py-8">
             <Button
               size="lg"
               onClick={startRecording}
-              className="h-24 w-24 rounded-full bg-red-500 hover:bg-red-600"
+              className="h-24 w-24 rounded-full bg-red-500 shadow-elegant hover:bg-red-600"
             >
               <Mic className="h-10 w-10" />
             </Button>
-            <p className="text-muted-foreground">Начать запись</p>
+            <div className="text-center">
+              <p className="font-semibold text-foreground">Начать запись</p>
+              <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                Нажмите кнопку записи и прочитайте текст вслух.
+              </p>
+            </div>
           </div>
         )}
 
-        {/* Recording State */}
         {recordingState === 'recording' && (
           <div className="flex flex-col items-center gap-4 py-8">
             <div className="relative">
@@ -236,44 +253,58 @@ export function AudioRecorder({ assignmentId, originalText }: AudioRecorderProps
               >
                 <Square className="h-8 w-8" />
               </Button>
-              {/* Pulsing ring animation */}
               <div className="absolute inset-0 -z-10 rounded-full bg-red-500/30 animate-ping" />
             </div>
             <div className="text-center">
-              <p className="text-2xl font-mono font-semibold">{formatTime(elapsedTime)}</p>
+              <p className="font-mono text-2xl font-semibold text-foreground">{formatTime(elapsedTime)}</p>
               <p className="text-muted-foreground">Идет запись...</p>
             </div>
           </div>
         )}
 
-        {/* Finished State */}
         {recordingState === 'finished' && audioUrl && (
           <div className="space-y-4">
             <div className="flex flex-col items-center gap-4 py-4">
+              <div className="rounded-full border border-green-200 bg-green-50 px-4 py-1.5 text-sm font-semibold text-green-700">
+                Запись готова
+              </div>
               <p className="text-sm text-muted-foreground">
                 Длительность: {formatTime(elapsedTime)}
               </p>
               <audio controls src={audioUrl} className="w-full" />
             </div>
 
+            {submitting && (
+              <div className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-3 text-sm">
+                <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Идет анализ произношения...</p>
+                  <p className="text-muted-foreground">
+                    Аудио отправлено, результат появится после обработки.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 onClick={rerecord}
-                className="flex-1"
+                className="flex-1 rounded-full"
+                disabled={submitting}
               >
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Перезаписать
               </Button>
               <Button
                 onClick={handleSubmit}
-                className="flex-1"
+                className="flex-1 rounded-full"
                 disabled={submitting}
               >
                 {submitting ? (
                   <span className="flex items-center">
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Отправка...
+                    Анализ...
                   </span>
                 ) : (
                   <span className="flex items-center">

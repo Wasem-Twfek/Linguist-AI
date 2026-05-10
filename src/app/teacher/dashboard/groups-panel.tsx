@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { deleteGroup } from './actions'
+import { deleteGroup } from './group-actions'
 import { CreateGroupDialog } from './create-group-dialog'
 import { GroupMembersDialog } from './group-members-dialog'
 import { toast } from 'sonner'
@@ -17,7 +17,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-// Type for group with member count
 interface GroupWithCount {
   id: string
   name: string
@@ -33,10 +32,6 @@ interface GroupsPanelProps {
   onMemberCountUpdated: (groupId: string, newCount: number) => void
 }
 
-/**
- * Panel displaying teacher's groups with member management
- * Allows creating groups and managing group members
- */
 export function GroupsPanel({ groups, onGroupCreated, onGroupDeleted, onMemberCountUpdated }: GroupsPanelProps) {
   const [selectedGroup, setSelectedGroup] = useState<GroupWithCount | null>(null)
   const [membersDialogOpen, setMembersDialogOpen] = useState(false)
@@ -58,6 +53,16 @@ export function GroupsPanel({ groups, onGroupCreated, onGroupDeleted, onMemberCo
     setDeleteDialogOpen(true)
   }
 
+  function handleDeleteDialogOpenChange(open: boolean) {
+    if (open) {
+      setDeleteDialogOpen(true)
+      return
+    }
+
+    if (deletingId) return
+    setDeleteDialogOpen(false)
+  }
+
   async function handleConfirmDelete() {
     if (!deletingGroup) return
 
@@ -69,10 +74,8 @@ export function GroupsPanel({ groups, onGroupCreated, onGroupDeleted, onMemberCo
         setDeletingId(null)
       } else if (result.success && result.deletedGroupId) {
         toast.success(`Группа "${deletingGroup.name}" удалена`)
-        // Notify parent to update state and refresh
         onGroupDeleted(result.deletedGroupId)
         setDeleteDialogOpen(false)
-        setDeletingGroup(null)
         setDeletingId(null)
       }
     } catch (err) {
@@ -145,7 +148,6 @@ export function GroupsPanel({ groups, onGroupCreated, onGroupDeleted, onMemberCo
         </CardContent>
       </Card>
 
-      {/* Group Members Dialog */}
       {selectedGroup && (
         <GroupMembersDialog
           groupId={selectedGroup.id}
@@ -156,11 +158,7 @@ export function GroupsPanel({ groups, onGroupCreated, onGroupDeleted, onMemberCo
         />
       )}
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
-        setDeleteDialogOpen(open)
-        if (!open) setDeletingGroup(null)
-      }}>
+      <Dialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Удалить группу?</DialogTitle>
@@ -180,7 +178,6 @@ export function GroupsPanel({ groups, onGroupCreated, onGroupDeleted, onMemberCo
               variant="outline"
               onClick={() => {
                 setDeleteDialogOpen(false)
-                setDeletingGroup(null)
               }}
               disabled={!!deletingId}
             >

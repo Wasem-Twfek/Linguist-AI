@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { createGroup } from './actions'
+import { createGroup } from './group-actions'
 import { toast } from 'sonner'
 
 interface CreateGroupDialogProps {
@@ -38,7 +38,6 @@ export function CreateGroupDialog({ onGroupCreated }: CreateGroupDialogProps) {
         toast.success('Группа создана')
         setOpen(false)
         setName('')
-        // Immediately update parent component state
         if (onGroupCreated) {
           onGroupCreated(result.group)
         }
@@ -54,19 +53,27 @@ export function CreateGroupDialog({ onGroupCreated }: CreateGroupDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Создать группу</Button>
+        <Button
+          type="button"
+          variant="secondary"
+          className="rounded-xl"
+        >
+          Создать группу
+        </Button>
       </DialogTrigger>
-      <DialogContent>
-        <form onSubmit={onSubmit}>
-          <DialogHeader>
-            <DialogTitle>Создать новую группу</DialogTitle>
+      <DialogContent className="overflow-hidden p-0 sm:max-w-lg">
+        <form onSubmit={onSubmit} className="grid gap-0">
+          <DialogHeader className="space-y-2 border-b border-blue-100 bg-blue-50/70 px-6 py-5 pr-14 text-left sm:px-8">
+            <DialogTitle className="text-[1.35rem] text-slate-950">Создать новую группу</DialogTitle>
             <DialogDescription>
               Введите название группы для ваших учеников
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 px-6 py-6 sm:px-8">
             <div className="grid gap-2">
-              <Label htmlFor="name">Название группы</Label>
+              <Label htmlFor="name" className="text-sm font-semibold text-slate-900">
+                Название группы
+              </Label>
               <Input
                 id="name"
                 value={name}
@@ -74,10 +81,11 @@ export function CreateGroupDialog({ onGroupCreated }: CreateGroupDialogProps) {
                 placeholder="Например: Группа А"
                 required
                 disabled={loading}
+                className="h-12 rounded-xl border-blue-100 bg-white px-4 text-base shadow-sm focus-visible:border-blue-400 focus-visible:ring-blue-200"
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t border-blue-100 bg-slate-50/80 px-6 py-4 sm:gap-3 sm:px-8">
             <Button
               type="button"
               variant="outline"
@@ -86,10 +94,15 @@ export function CreateGroupDialog({ onGroupCreated }: CreateGroupDialogProps) {
                 setName('')
               }}
               disabled={loading}
+              className="h-11 rounded-xl px-5"
             >
               Отмена
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button
+              type="submit"
+              disabled={loading}
+              className="h-11 rounded-xl px-6"
+            >
               {loading ? 'Сохранение...' : 'Сохранить'}
             </Button>
           </DialogFooter>

@@ -1,8 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-
 @custom-variant dark (&:is(.dark *));
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -120,3 +118,127 @@
     @apply bg-background text-foreground;
   }
 }
+
+.landing-light,
+.app-light {
+  --radius: 0.875rem;
+  --background: oklch(0.99 0.003 250);
+  --foreground: oklch(0.18 0.04 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.04 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.04 265);
+  --primary: oklch(0.22 0.07 265);
+  --primary-foreground: oklch(0.99 0.003 250);
+  --secondary: oklch(0.96 0.01 250);
+  --secondary-foreground: oklch(0.22 0.07 265);
+  --muted: oklch(0.965 0.008 250);
+  --muted-foreground: oklch(0.5 0.03 260);
+  --accent: oklch(0.62 0.18 258);
+  --accent-foreground: oklch(0.99 0.003 250);
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.704 0.04 256.788);
+  background-color: var(--background);
+  overflow-x: hidden;
+}
+
+.app-light {
+  background:
+    radial-gradient(circle at 50% -10%, oklch(0.95 0.04 258) 0%, transparent 34rem),
+    linear-gradient(180deg, oklch(0.99 0.003 250), oklch(0.975 0.008 250));
+}
+
+.app-light [data-slot="card"] {
+  border-color: var(--border);
+  border-radius: 1.5rem;
+  background-color: var(--card);
+  box-shadow: 0 4px 24px -8px oklch(0.22 0.07 265 / 0.12);
+}
+
+.app-light [data-slot="card-title"] {
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+}
+
+.app-light [data-slot="input"],
+.app-light [data-slot="textarea"],
+.app-light select {
+  border-color: var(--border);
+  border-radius: 0.875rem;
+  background-color: var(--card);
+}
+
+.app-light table thead {
+  background-color: oklch(0.965 0.008 250);
+}
+
+.app-light ::selection {
+  background-color: oklch(0.62 0.18 258 / 0.18);
+}
+
+.app-light .text-slate-950,
+.app-light .text-slate-900 {
+  color: var(--foreground);
+}
+
+.app-light .text-slate-800,
+.app-light .text-slate-700 {
+  color: oklch(0.28 0.04 265);
+}
+
+.app-light .text-slate-600,
+.app-light .text-slate-500 {
+  color: var(--muted-foreground);
+}
+
+.app-light .border-slate-300,
+.app-light .border-slate-200,
+.app-light .border-slate-100 {
+  border-color: var(--border);
+}
+
+.app-light .bg-white {
+  background-color: var(--card);
+}
+
+.app-light .bg-slate-950 {
+  background-color: var(--primary);
+}
+
+.app-light .hover\:bg-slate-800:hover,
+.app-light .hover\:bg-slate-950:hover {
+  background-color: oklch(0.28 0.08 265);
+}
+
+.app-light .bg-slate-50,
+.app-light .bg-slate-100 {
+  background-color: var(--secondary);
+}
+
+.app-light .hover\:bg-blue-50:hover,
+.app-light .hover\:bg-blue-50\/40:hover,
+.app-light .hover\:bg-blue-50\/30:hover {
+  background-color: oklch(0.95 0.04 258 / 0.65);
+}
+
+@utility font-display {
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+@utility bg-hero-gradient {
+  background: radial-gradient(
+    ellipse at top,
+    oklch(0.95 0.04 258) 0%,
+    oklch(0.99 0.003 250) 60%
+  );
+}
+
+@utility shadow-elegant {
+  box-shadow: 0 20px 60px -20px oklch(0.22 0.07 265 / 0.25);
+}
+
+@utility shadow-soft {
+  box-shadow: 0 4px 24px -8px oklch(0.22 0.07 265 / 0.12);
+}
+

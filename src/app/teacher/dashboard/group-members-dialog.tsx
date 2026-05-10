@@ -11,12 +11,11 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { getGroupMembers, addStudentToGroup, removeStudentFromGroup } from './actions'
+import { getGroupMembers, addStudentToGroup, removeStudentFromGroup } from './group-actions'
 import { toast } from 'sonner'
 import { Loader2, UserPlus, Trash2, Users } from 'lucide-react'
 import { getDisplayName } from '@/lib/display-name'
 
-// Type for group member with profile info
 interface GroupMember {
   id: string
   user_id: string
@@ -36,10 +35,6 @@ interface GroupMembersDialogProps {
   onMemberCountUpdate?: (groupId: string, newCount: number) => void
 }
 
-/**
- * Dialog for managing group members
- * Teachers can view, add (by email), and remove students
- */
 export function GroupMembersDialog({ 
   groupId, 
   groupName, 
@@ -53,7 +48,6 @@ export function GroupMembersDialog({
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [studentEmail, setStudentEmail] = useState('')
 
-  // Memoized fetch function
   const fetchMembers = useCallback(async () => {
     setLoading(true)
     try {
@@ -71,7 +65,6 @@ export function GroupMembersDialog({
     }
   }, [groupId])
 
-  // Fetch group members when dialog opens
   useEffect(() => {
     if (open && groupId) {
       fetchMembers()
@@ -90,8 +83,7 @@ export function GroupMembersDialog({
       } else if (result.success) {
         toast.success('Студент добавлен в группу')
         setStudentEmail('')
-        fetchMembers() // Refresh list
-        // Immediately update member count in parent
+        fetchMembers()
         if (result.memberCount !== undefined && onMemberCountUpdate) {
           onMemberCountUpdate(groupId, result.memberCount)
         }
@@ -112,8 +104,7 @@ export function GroupMembersDialog({
         toast.error(result.error)
       } else if (result.success) {
         toast.success('Студент удален из группы')
-        fetchMembers() // Refresh list
-        // Immediately update member count in parent
+        fetchMembers()
         if (result.memberCount !== undefined && onMemberCountUpdate) {
           onMemberCountUpdate(groupId, result.memberCount)
         }
@@ -128,22 +119,27 @@ export function GroupMembersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[80vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            {groupName}
-          </DialogTitle>
-          <DialogDescription>
-            Управление участниками группы
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex max-h-[min(90dvh,40rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <div className="space-y-1 border-b border-blue-100 bg-blue-50/70 px-6 pb-5 pt-6 sm:px-8 sm:pt-7">
+          <DialogHeader className="space-y-2 text-left">
+            <DialogTitle className="flex items-center gap-3 pr-10 text-left text-[1.35rem] text-slate-950">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+                <Users className="h-5 w-5" aria-hidden />
+              </span>
+              <span className="min-w-0 break-words">{groupName}</span>
+            </DialogTitle>
+            <DialogDescription className="text-left">
+              Управление участниками группы
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        <div className="flex-1 overflow-y-auto space-y-4">
-          {/* Add Student Form */}
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6 sm:px-8">
           <form onSubmit={handleAddStudent} className="space-y-2">
-            <Label htmlFor="studentEmail">Добавить студента по email</Label>
-            <div className="flex gap-2">
+            <Label htmlFor="studentEmail" className="text-sm font-semibold text-slate-900">
+              Добавить студента по email
+            </Label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
               <Input
                 id="studentEmail"
                 type="email"
@@ -151,64 +147,73 @@ export function GroupMembersDialog({
                 onChange={(e) => setStudentEmail(e.target.value)}
                 placeholder="student@example.com"
                 disabled={addingStudent}
-                className="flex-1"
+                className="h-12 min-w-0 flex-1 rounded-xl border-blue-100 bg-white px-4 text-base shadow-sm focus-visible:border-blue-400 focus-visible:ring-blue-200"
               />
-              <Button type="submit" disabled={addingStudent || !studentEmail.trim()}>
+              <Button
+                type="submit"
+                disabled={addingStudent || !studentEmail.trim()}
+                className="h-12 min-w-[8.75rem] shrink-0 gap-2 rounded-xl px-5 sm:w-auto"
+                aria-label="Добавить студента в группу"
+              >
                 {addingStudent ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                 ) : (
-                  <UserPlus className="h-4 w-4" />
+                  <UserPlus className="h-4 w-4" aria-hidden />
                 )}
+                Добавить
               </Button>
             </div>
           </form>
 
-          {/* Members List */}
           <div className="space-y-2">
-            <Label>Участники ({members.length})</Label>
-            
+            <Label className="text-sm font-semibold text-slate-900">
+              Участники ({members.length})
+            </Label>
+
             {loading ? (
-              <div className="flex justify-center py-4">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <div className="flex justify-center rounded-2xl border border-blue-100 bg-white py-8 shadow-sm">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" aria-hidden />
               </div>
             ) : members.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground text-sm">
+              <div className="rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 px-4 py-8 text-center text-sm text-slate-500">
                 В группе пока нет студентов
               </div>
             ) : (
-              <div className="border rounded-lg divide-y">
+              <div className="divide-y divide-blue-100 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm">
                 {members.map((member) => (
-                  <div 
-                    key={member.id} 
-                    className="flex items-center justify-between p-3 hover:bg-muted/50"
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between gap-3 bg-white p-4 transition-colors hover:bg-blue-50/50"
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-foreground">
                         {getDisplayName(member.profile?.full_name, member.profile?.email)}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs leading-relaxed text-muted-foreground">
                         {member.profile?.email ? (
                           <span className="block truncate">{member.profile.email}</span>
                         ) : (
                           <span className="block truncate">—</span>
                         )}
-                        Добавлен: {member.joined_at 
+                        Добавлен:{' '}
+                        {member.joined_at
                           ? new Date(member.joined_at).toLocaleDateString('ru-RU')
-                          : '—'
-                        }
+                          : '—'}
                       </p>
                     </div>
                     <Button
+                      type="button"
                       variant="ghost"
                       size="icon"
                       onClick={() => handleRemoveStudent(member.id)}
                       disabled={removingId === member.id}
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
+                      className="size-10 shrink-0 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700 focus-visible:ring-red-200"
+                      aria-label="Удалить студента из группы"
                     >
                       {removingId === member.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                       ) : (
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" aria-hidden />
                       )}
                     </Button>
                   </div>

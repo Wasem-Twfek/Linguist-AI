@@ -1,11 +1,11 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { DashboardHeader } from '@/components/dashboard-header'
+import { SmartBackButton } from '@/components/smart-back-button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AudioRecorder } from '@/components/audio-recorder'
 import { AuthGuard } from '@/components/auth-guard'
 
-// Prevent caching of protected pages - forces server-side rendering on every request
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -13,26 +13,28 @@ interface AssignmentPageProps {
   params: Promise<{ id: string }>
 }
 
-/**
- * Get assignment with security check - ensures student is in the assignment's group
- * CRITICAL: Students can ONLY access assignments from groups they belong to
- */
+const assignmentSteps = [
+  'Прочитайте текст',
+  'Запишите аудио',
+  'Отправьте попытку',
+  'Получите AI-отчет',
+]
+
+// Security: verify group membership before returning the assignment.
 async function getAssignment(id: string, userId: string) {
   const supabase = await createClient()
   
-  // First, get the assignment
   const { data: assignment, error } = await supabase
     .from('assignments')
     .select('*')
     .eq('id', id)
-    .eq('is_active', true) // Only active assignments
+    .eq('is_active', true)
     .single()
 
   if (error || !assignment || !assignment.group_id) {
     return null
   }
 
-  // CRITICAL: Verify student is a member of the assignment's group
   const { data: membership, error: membershipError } = await supabase
     .from('group_members')
     .select('id')
@@ -41,27 +43,29 @@ async function getAssignment(id: string, userId: string) {
     .single()
 
   if (membershipError || !membership) {
-    // Student is not a member of this group - deny access
     return null
   }
 
-  // CRITICAL: Verify the group is active (soft-delete check)
-  // Type assertion needed until types are regenerated after migration
-  const groupQuery = supabase
+  const { data: group, error: groupError } = await supabase
     .from('study_groups')
     .select('id')
     .eq('id', assignment.group_id)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: group, error: groupError } = await (groupQuery as any).eq('is_active', true).single()
+    .eq('is_active', true)
+    .single()
 
   if (groupError || !group) {
-    // Group is inactive (soft-deleted) or doesn't exist - deny access
     return null
   }
 
   return assignment
 }
 
+/*
+ * AssignmentPage:
+ * الغرض: صفحة قراءة النص والتسجيل.
+ * input: id من URL.
+ * output: UI فيه النص وAudioRecorder أو redirect لو access مرفوض.
+ */
 export default async function AssignmentPage({ params }: AssignmentPageProps) {
   const { id } = await params
   const supabase = await createClient()
@@ -71,7 +75,6 @@ export default async function AssignmentPage({ params }: AssignmentPageProps) {
     redirect('/login')
   }
 
-  // Verify student role - prevent teachers from accessing student routes
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
@@ -79,39 +82,51 @@ export default async function AssignmentPage({ params }: AssignmentPageProps) {
     .single()
 
   if (profile?.role !== 'student') {
-    // Redirect teachers to their dashboard
     if (profile?.role === 'teacher') {
       redirect('/teacher/dashboard')
     }
-    // If role is missing/null, redirect to login
     redirect('/login')
   }
 
-  // CRITICAL: Pass userId to verify group membership
   const assignment = await getAssignment(id, user.id)
 
   if (!assignment) {
-    // Assignment doesn't exist, is inactive, or student is not in the group
     redirect('/student/dashboard')
   }
 
   return (
     <AuthGuard requiredRole="student">
-      <div className="min-h-screen bg-background">
+      <div className="app-light min-h-screen bg-background text-foreground">
         <DashboardHeader />
         <main className="container mx-auto px-4 py-8">
+          <SmartBackButton
+            fallbackHref="/student/dashboard"
+            label="Назад к заданиям"
+            className="mb-6"
+          />
+          <Card className="mb-6 overflow-hidden border-blue-100 bg-gradient-to-br from-white to-blue-50/70">
+            <CardContent className="grid gap-3 py-5 sm:grid-cols-2 lg:grid-cols-4">
+              {assignmentSteps.map((step, index) => (
+                <div key={step} className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-white/80 p-3 shadow-sm">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+                    {index + 1}
+                  </span>
+                  <span className="text-sm font-semibold text-foreground">{step}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
           <div className="grid gap-6 lg:grid-cols-[1fr,400px]">
-            {/* Left Column - Assignment Content */}
             <div className="space-y-4">
-              <Card>
+              <Card className="overflow-hidden">
                 <CardHeader>
-                  <CardTitle className="text-2xl">{assignment.title || 'Без названия'}</CardTitle>
+                  <CardTitle className="text-2xl tracking-tight">{assignment.title || 'Без названия'}</CardTitle>
                   <p className="text-sm text-muted-foreground">
                     Тип: {assignment.type === 'reading' ? 'Чтение' : assignment.type === 'essay' ? 'Эссе' : assignment.type}
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <div className="prose prose-lg dark:prose-invert max-w-none">
+                  <div className="prose prose-lg max-w-none">
                     <p className="text-lg leading-relaxed whitespace-pre-wrap">
                       {assignment.text_content}
                     </p>
@@ -120,7 +135,6 @@ export default async function AssignmentPage({ params }: AssignmentPageProps) {
               </Card>
             </div>
 
-            {/* Right Column - Recording Interface (Sticky) */}
             <div className="lg:sticky lg:top-8 lg:h-fit">
               <AudioRecorder 
                 assignmentId={assignment.id}
@@ -133,5 +147,3 @@ export default async function AssignmentPage({ params }: AssignmentPageProps) {
     </AuthGuard>
   )
 }
-
-

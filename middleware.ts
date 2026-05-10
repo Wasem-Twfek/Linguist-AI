@@ -1,5 +1,15 @@
+/*
+ * الملف: middleware.ts
+ * النوع: Backend / Auth / Route Protection
+ * وظيفة الملف: بيتنفذ قبل صفحات Next.js عشان يتأكد إن المستخدم عامل login وإنه داخل route مناسب للrole بتاعه.
+ * مستخدم بواسطة: Next.js تلقائيا قبل routes زي /student و /teacher.
+ */
+
+// NextRequest و NextResponse أدوات من Next.js للتعامل مع الطلب والرد قبل ما الصفحة تفتح.
 import { type NextRequest, NextResponse } from 'next/server'
+// createServerClient بيعمل Supabase client يقدر يقرأ cookies داخل middleware.
 import { createServerClient } from '@supabase/ssr'
+// Database type بيساعد TypeScript يعرف أسماء الجداول والأعمدة في Supabase.
 import { Database } from './types/supabase'
 
 // ============================================================================
@@ -7,6 +17,7 @@ import { Database } from './types/supabase'
 // ============================================================================
 
 /** Public routes that don't require authentication */
+// دي routes عامة: أي حد يقدر يفتحها من غير login.
 const PUBLIC_ROUTES = [
   '/',
   '/login',
@@ -15,11 +26,11 @@ const PUBLIC_ROUTES = [
   '/signup-teacher',
   '/signup/choose-role',
   '/auth/callback',
-  '/api/auth/callback',
   '/api/test-models',
 ]
 
 /** Role-specific protected route prefixes */
+// أي route يبدأ بـ /teacher محتاج teacher، وأي route يبدأ بـ /student محتاج student.
 const TEACHER_ROUTES = ['/teacher']
 const STUDENT_ROUTES = ['/student']
 
@@ -39,6 +50,7 @@ const DEBUG = process.env.NODE_ENV === 'development'
 /**
  * Check if a path is a public route
  */
+// الدالة دي بتقول لنا هل الصفحة عامة ولا محتاجة login.
 function isPublicRoute(path: string): boolean {
   // Exact match for root
   if (path === '/') return true
@@ -48,7 +60,6 @@ function isPublicRoute(path: string): boolean {
   
   // Check prefix matches for auth-related routes
   if (path.startsWith('/auth/')) return true
-  if (path.startsWith('/api/auth/')) return true
   
   return false
 }
@@ -56,6 +67,7 @@ function isPublicRoute(path: string): boolean {
 /**
  * Check if path starts with any of the given prefixes
  */
+// بنستخدمها عشان نعرف هل URL يبدأ بكلمة معينة زي /teacher.
 function matchesPrefix(path: string, prefixes: string[]): boolean {
   return prefixes.some(prefix => path.startsWith(prefix))
 }
@@ -63,6 +75,7 @@ function matchesPrefix(path: string, prefixes: string[]): boolean {
 /**
  * Determine required role for a route
  */
+// الدالة دي بترجع role المطلوب للroute: teacher أو student أو null لو route مش محمي بrole.
 function getRequiredRole(path: string): 'teacher' | 'student' | null {
   if (matchesPrefix(path, TEACHER_ROUTES)) return 'teacher'
   if (matchesPrefix(path, STUDENT_ROUTES)) return 'student'
@@ -72,6 +85,7 @@ function getRequiredRole(path: string): 'teacher' | 'student' | null {
 /**
  * Get redirect URL for a role
  */
+// بتحول role إلى dashboard المناسب له.
 function getDashboardForRole(role: string): string {
   return role === 'teacher' ? TEACHER_DASHBOARD : STUDENT_DASHBOARD
 }
@@ -79,6 +93,7 @@ function getDashboardForRole(role: string): string {
 /**
  * Debug logger
  */
+// logger بسيط يشتغل في development بس عشان نفهم middleware بتعمل إيه.
 function debug(message: string, data?: Record<string, unknown>) {
   if (DEBUG) {
     console.log(`[Middleware] ${message}`, data || '')
@@ -90,6 +105,7 @@ function debug(message: string, data?: Record<string, unknown>) {
 // ============================================================================
 
 export async function middleware(request: NextRequest) {
+  // pathname هو الجزء بتاع route، مثلا /student/dashboard.
   const { pathname } = request.nextUrl
   
   debug('Processing request', { path: pathname })
@@ -97,8 +113,10 @@ export async function middleware(request: NextRequest) {
   // -------------------------------------------------------------------------
   // Step 1: Create Supabase client with cookie handling
   // -------------------------------------------------------------------------
+  // بنجهز response مبدئي يسمح للطلب يكمل لو كل الفحوصات نجحت.
   let response = NextResponse.next({ request })
   
+  // Supabase client هنا لازم يعرف يقرأ ويكتب cookies، لأن session بتاعة login موجودة في cookies.
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -121,6 +139,7 @@ export async function middleware(request: NextRequest) {
   // -------------------------------------------------------------------------
   // Step 2: Refresh session and get user
   // -------------------------------------------------------------------------
+  // getUser بتسأل Supabase: هل فيه user logged in بناء على cookies؟
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   
   if (authError) {
@@ -142,10 +161,12 @@ export async function middleware(request: NextRequest) {
   // -------------------------------------------------------------------------
   // Step 3: Handle public routes
   // -------------------------------------------------------------------------
+  // لو الصفحة public، غالبا نسمح بالدخول، لكن لو user logged in وداخل /login نوديه dashboard.
   if (isPublicRoute(pathname)) {
     // If authenticated user visits login page, redirect to their dashboard
     if (isAuthenticated && pathname === LOGIN_ROUTE) {
       const { data: profile } = await supabase
+        // جدول profiles فيه role بتاع المستخدم.
         .from('profiles')
         .select('role')
         .eq('id', userId!)
@@ -175,6 +196,7 @@ export async function middleware(request: NextRequest) {
   // -------------------------------------------------------------------------
   // Step 4: Handle unauthenticated users on protected routes
   // -------------------------------------------------------------------------
+  // لو مفيش user وroute محتاج role، نبعته login ونحفظ route الأصلي في query.
   if (!isAuthenticated) {
     const requiredRole = getRequiredRole(pathname)
     
@@ -196,6 +218,7 @@ export async function middleware(request: NextRequest) {
   // -------------------------------------------------------------------------
   // Step 5: Fetch user role for authenticated users
   // -------------------------------------------------------------------------
+  // المستخدم عامل login، دلوقتي نجيب role من profiles عشان نعرف يسمح له بإيه.
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role')
@@ -231,6 +254,7 @@ export async function middleware(request: NextRequest) {
   // Step 6: Role-based access control with redirect loop prevention
   // -------------------------------------------------------------------------
   
+  // لو route محتاج role معين، نقارنه بالrole الحقيقي للمستخدم.
   if (requiredRole) {
     // Check if user has correct role for this route
     if (userRole !== requiredRole) {
@@ -266,6 +290,7 @@ export async function middleware(request: NextRequest) {
   // -------------------------------------------------------------------------
   // Step 7: Set cache headers for protected routes
   // -------------------------------------------------------------------------
+  // protected pages ماينفعش تتخزن في cache، عشان بعد logout زر back مايرجعش صفحة محمية قديمة.
   if (requiredRole) {
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
     response.headers.set('Pragma', 'no-cache')
@@ -280,6 +305,7 @@ export async function middleware(request: NextRequest) {
 // ============================================================================
 
 export const config = {
+  // matcher بيحدد middleware تشتغل على أنهي routes، مع استثناء static files والصور.
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
@@ -291,4 +317,13 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 }
+
+/*
+ * ملخص الملف:
+ * - بيحمي صفحات /student و /teacher.
+ * - بيقرأ session من Supabase cookies.
+ * - بيجيب role من جدول profiles.
+ * - بيعمل redirect للمستخدم لو داخل route غلط.
+ * - بيمنع cache في الصفحات المحمية.
+ */
 

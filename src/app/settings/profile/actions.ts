@@ -17,7 +17,6 @@ export async function updateProfileName(fullName: string) {
     redirect('/login')
   }
 
-  // Validate full name
   const validation = fullNameSchema.safeParse(fullName)
   if (!validation.success) {
     return { error: validation.error.issues[0]?.message || 'Неверное имя' }
@@ -25,7 +24,6 @@ export async function updateProfileName(fullName: string) {
 
   const trimmedName = validation.data
 
-  // Update profile
   const { error } = await supabase
     .from('profiles')
     .update({ full_name: trimmedName })

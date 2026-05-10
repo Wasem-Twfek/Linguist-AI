@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select'
 import { Loader2, BookOpen } from 'lucide-react'
 import { toast } from 'sonner'
-import { createManualAssignment } from './actions'
+import { createManualAssignment } from './assignment-actions'
 
 type Level = 'Beginner' | 'Intermediate' | 'Advanced'
 
@@ -46,7 +46,6 @@ export function CreateManualAssignmentForm({ groups, onAssignmentCreated }: Crea
   const [textContent, setTextContent] = useState('')
   const [isCreating, setIsCreating] = useState(false)
 
-  // Auto-select first group if available and none selected
   useEffect(() => {
     if (groups.length > 0 && !groupId) {
       setGroupId(groups[0].id)
@@ -84,7 +83,7 @@ export function CreateManualAssignmentForm({ groups, onAssignmentCreated }: Crea
 
       if (result.error) {
         toast.error(result.error)
-      } else       if (result.success && result.assignment) {
+      } else if (result.success && result.assignment) {
         toast.success('Урок успешно создан')
         setTitle('')
         setTopic('')
@@ -93,9 +92,9 @@ export function CreateManualAssignmentForm({ groups, onAssignmentCreated }: Crea
           onAssignmentCreated(result.assignment)
         }
         router.refresh()
-        // Signal student dashboards to refresh (cross-window)
         if (typeof window !== 'undefined') {
           localStorage.setItem('student-dashboard-updated', Date.now().toString())
+          // Manually dispatch storage event for same-tab listeners.
           window.dispatchEvent(new StorageEvent('storage', {
             key: 'student-dashboard-updated',
             newValue: Date.now().toString()

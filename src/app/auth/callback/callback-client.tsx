@@ -59,7 +59,6 @@ export function AuthCallbackClient() {
           router.replace('/login?error=oauth')
           return
         }
-        // Session already exists (e.g. React Strict Mode ran the effect twice).
       }
 
       await completeOAuthRedirect()

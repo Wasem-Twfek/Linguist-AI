@@ -27,7 +27,6 @@ export function CreateAssignmentForm({ groups }: CreateAssignmentFormProps) {
   const [textContent, setTextContent] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Prefill from query params if available
   useEffect(() => {
     const topicParam = searchParams.get('topic')
     const groupIdParam = searchParams.get('groupId')
@@ -58,9 +57,9 @@ export function CreateAssignmentForm({ groups }: CreateAssignmentFormProps) {
         toast.error(result.error)
       } else {
         toast.success('Задание создано')
-        // Signal student dashboards to refresh (cross-window)
         if (typeof window !== 'undefined') {
           localStorage.setItem('student-dashboard-updated', Date.now().toString())
+          // Manually dispatch storage event for same-tab listeners.
           window.dispatchEvent(new StorageEvent('storage', {
             key: 'student-dashboard-updated',
             newValue: Date.now().toString()
@@ -89,8 +88,7 @@ export function CreateAssignmentForm({ groups }: CreateAssignmentFormProps) {
           required
           disabled={loading || groups.length === 0}
           className={cn(
-            "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-            "dark:bg-input/30 dark:border-input"
+            "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
           )}
         >
           <option value="">Выберите группу</option>
@@ -124,8 +122,7 @@ export function CreateAssignmentForm({ groups }: CreateAssignmentFormProps) {
           required
           disabled={loading}
           className={cn(
-            "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-            "dark:bg-input/30 dark:border-input"
+            "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
           )}
         >
           <option value="">Выберите тип задания</option>

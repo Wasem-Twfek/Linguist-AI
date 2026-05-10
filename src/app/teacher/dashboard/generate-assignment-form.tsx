@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { Loader2, Sparkles, BookOpen, RotateCcw, FileText } from 'lucide-react'
 import { toast } from 'sonner'
-import { generateAssignment } from './actions'
+import { generateAssignment } from './assignment-actions'
 
 type Level = 'Beginner' | 'Intermediate' | 'Advanced'
 
@@ -50,7 +50,6 @@ export function GenerateAssignmentForm({ groups, onAssignmentCreated }: Generate
     vocabulary_hints: Array<{ word: string; translation: string }>
   } | null>(null)
 
-  // Auto-select first group if available and none selected
   useEffect(() => {
     if (groups.length > 0 && !groupId) {
       setGroupId(groups[0].id)
@@ -79,7 +78,6 @@ export function GenerateAssignmentForm({ groups, onAssignmentCreated }: Generate
 
       if (result.error) {
         setLastError(result.error)
-        // Don't increment failure count for rate limits
         if (result.errorType !== 'RATE_LIMIT') {
           setFailureCount(prev => prev + 1)
         }
@@ -97,13 +95,12 @@ export function GenerateAssignmentForm({ groups, onAssignmentCreated }: Generate
         setTopic('')
         setFailureCount(0)
         setLastError(null)
-        // Immediately notify parent about new assignment
         if (result.assignment && onAssignmentCreated) {
           onAssignmentCreated(result.assignment)
         }
-        // Signal student dashboards to refresh (cross-window)
         if (typeof window !== 'undefined') {
           localStorage.setItem('student-dashboard-updated', Date.now().toString())
+          // Manually dispatch storage event for same-tab listeners.
           window.dispatchEvent(new StorageEvent('storage', {
             key: 'student-dashboard-updated',
             newValue: Date.now().toString()
@@ -222,7 +219,6 @@ export function GenerateAssignmentForm({ groups, onAssignmentCreated }: Generate
             Обычно 5–10 секунд
           </p>
 
-          {/* Error state with retry */}
           {lastError && !isGenerating && (
             <div className="space-y-2 p-4 bg-destructive/10 border border-destructive/20 rounded-md">
               <p className="text-sm text-destructive font-medium">{lastError}</p>
@@ -240,20 +236,19 @@ export function GenerateAssignmentForm({ groups, onAssignmentCreated }: Generate
             </div>
           )}
 
-          {/* Fallback UX after 2 failures */}
           {failureCount >= 2 && !isGenerating && (
-            <div className="space-y-2 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
-              <p className="text-sm text-amber-900 dark:text-amber-100 font-medium">
+            <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-medium text-amber-900">
                 Генерация не удалась несколько раз
               </p>
-              <p className="text-xs text-amber-700 dark:text-amber-300">
+              <p className="text-xs text-amber-700">
                 Вы можете создать урок вручную, сохранив выбранные параметры
               </p>
               <Button
                 onClick={handleManualCreate}
                 variant="outline"
                 size="sm"
-                className="w-full border-amber-300 dark:border-amber-700"
+                className="w-full rounded-full border-amber-300"
               >
                 <FileText className="h-3 w-3 mr-1" />
                 <span>Создать урок вручную</span>
@@ -263,9 +258,8 @@ export function GenerateAssignmentForm({ groups, onAssignmentCreated }: Generate
         </CardContent>
       </Card>
 
-      {/* Preview of Last Generated */}
       {lastGenerated && (
-        <Card className="border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
+        <Card className="border-green-200 bg-green-50/50">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <BookOpen className="h-4 w-4 text-green-600" />
@@ -301,4 +295,3 @@ export function GenerateAssignmentForm({ groups, onAssignmentCreated }: Generate
     </div>
   )
 }
-

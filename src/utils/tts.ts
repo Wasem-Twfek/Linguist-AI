@@ -1,73 +1,85 @@
-/**
- * Text-to-Speech utility using browser-native Web Speech API
- * 
- * Provides safe, client-side TTS functionality without external dependencies.
- * Handles cancellation and prevents memory leaks.
- */
-
-/**
- * Check if SpeechSynthesis is supported in the browser
- */
 export function isTTSSupported(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window
 }
 
-/**
- * Stop any currently playing speech
- */
 export function stop(): void {
   if (!isTTSSupported()) return
   
   const synth = window.speechSynthesis
   
-  // Cancel any pending or active utterances
   synth.cancel()
 }
 
-/**
- * Speak text using browser TTS
- * 
- * @param text - Text to speak
- * @param lang - Language code (default: 'en-US')
- */
-export function speak(text: string, lang: string = 'en-US'): void {
+export function pause(): boolean {
+  if (!isTTSSupported()) return false
+
+  const synth = window.speechSynthesis
+
+  if (synth.speaking && !synth.paused) {
+    synth.pause()
+    return true
+  }
+
+  return synth.paused
+}
+
+export function resume(): boolean {
+  if (!isTTSSupported()) return false
+
+  const synth = window.speechSynthesis
+
+  if (synth.paused) {
+    synth.resume()
+    return true
+  }
+
+  return synth.speaking && !synth.paused
+}
+
+interface SpeakCallbacks {
+  onEnd?: () => void
+  onError?: (error: SpeechSynthesisErrorEvent) => void
+  onBoundary?: (event: SpeechSynthesisEvent) => void
+}
+
+export function speak(
+  text: string,
+  lang: string = 'en-US',
+  callbacks?: SpeakCallbacks
+): SpeechSynthesisUtterance | null {
   if (!isTTSSupported()) {
     console.warn('SpeechSynthesis is not supported in this browser')
-    return
+    return null
   }
 
   if (!text || text.trim().length === 0) {
     console.warn('Cannot speak empty text')
-    return
+    return null
   }
 
   const synth = window.speechSynthesis
 
-  // Stop any currently playing speech before starting new one
   stop()
 
-  // Create new utterance
   const utterance = new SpeechSynthesisUtterance(text.trim())
   utterance.lang = lang
-  utterance.rate = 0.9 // Slightly slower for clarity
+  utterance.rate = 0.9
   utterance.pitch = 1.0
   utterance.volume = 1.0
 
-  // Handle completion and errors
   utterance.onend = () => {
-    // Cleanup handled by speechSynthesis state
+    callbacks?.onEnd?.()
   }
 
   utterance.onerror = (error) => {
-    // SpeechSynthesis error objects don't serialize well, extract useful info
+    callbacks?.onError?.(error)
+
     const errorInfo = error.error 
       ? `Error type: ${error.error}`
       : error.type 
       ? `Error type: ${error.type}`
       : 'Unknown TTS error'
     
-    // Only log if it's a real error (not cancellation)
-    // 'canceled' and 'interrupted' are normal when user stops speech
     if (error.error !== 'canceled' && error.error !== 'interrupted') {
       console.warn('TTS error:', errorInfo, {
         charIndex: error.charIndex,
@@ -77,14 +89,21 @@ export function speak(text: string, lang: string = 'en-US'): void {
     }
   }
 
-  // Speak
+  utterance.onboundary = (event) => {
+    callbacks?.onBoundary?.(event)
+  }
+
   synth.speak(utterance)
+
+  return utterance
 }
 
-/**
- * Check if speech is currently playing
- */
 export function isSpeaking(): boolean {
   if (!isTTSSupported()) return false
   return window.speechSynthesis.speaking
+}
+
+export function isPaused(): boolean {
+  if (!isTTSSupported()) return false
+  return window.speechSynthesis.paused
 }

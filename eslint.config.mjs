@@ -11,6 +11,7 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "Light mode/**",
     "next-env.d.ts",
     "types/supabase.ts", // Generated file
   ]),

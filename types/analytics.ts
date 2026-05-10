@@ -1,7 +1,25 @@
-/**
- * Assignment-level analytics for teachers
- * All analytics data must conform to this shape
- */
+export type ScoreDistribution = {
+  '80-100': number
+  '60-79': number
+  '<60': number
+}
+
+export type TrendDataPoint = {
+  date: string
+  avgScore: number
+  attemptsCount: number
+}
+
+export type AssignmentLatestAttempt = {
+  result_id: string
+  student_name: string
+  overall_score: number | null
+  pronunciation_score: number | null
+  grammar_score: number | null
+  created_at: string | null
+  attempt_number: number | null
+}
+
 export type AssignmentAnalytics = {
   assignment_id: string
   total_students: number
@@ -14,16 +32,5 @@ export type AssignmentAnalytics = {
   score_delta: number | null
   distribution: ScoreDistribution
   last_activity: string | null
-}
-
-export type TrendDataPoint = {
-  date: string
-  avgScore: number
-  attemptsCount: number
-}
-
-export type ScoreDistribution = {
-  '80-100': number
-  '60-79': number
-  '<60': number
+  latest_attempts: AssignmentLatestAttempt[]
 }

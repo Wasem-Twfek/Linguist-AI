@@ -1,23 +1,22 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { DashboardHeader } from '@/components/dashboard-header'
+import { SmartBackButton } from '@/components/smart-back-button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CreateAssignmentForm } from './create-assignment-form'
 
-// Prevent caching of protected pages
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 async function getStudyGroups(userId: string) {
   const supabase = await createClient()
   
-  // CRITICAL: Filter by is_active = true to exclude soft-deleted groups
-  const groupsQuery = supabase
+  const { data: groups, error } = await supabase
     .from('study_groups')
     .select('*')
     .eq('created_by', userId)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: groups, error } = await (groupsQuery as any).eq('is_active', true).order('created_at', { ascending: false })
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
 
   if (error) {
     console.error('Error fetching study groups:', error)
@@ -26,7 +25,6 @@ async function getStudyGroups(userId: string) {
 
   return groups || []
 }
-
 export default async function CreateAssignmentPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -35,7 +33,6 @@ export default async function CreateAssignmentPage() {
     redirect('/login')
   }
 
-  // Verify teacher role from database
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
@@ -49,12 +46,17 @@ export default async function CreateAssignmentPage() {
   const groups = await getStudyGroups(user.id)
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-light min-h-screen bg-background text-foreground">
       <DashboardHeader />
       <main className="container mx-auto px-4 py-8">
-        <Card className="max-w-2xl mx-auto">
+        <SmartBackButton
+          fallbackHref="/teacher/dashboard"
+          label="Назад к панели преподавателя"
+          className="mb-6"
+        />
+        <Card className="mx-auto max-w-2xl overflow-hidden">
           <CardHeader>
-            <CardTitle className="text-2xl">Новое задание</CardTitle>
+            <CardTitle className="text-2xl tracking-tight">Новое задание</CardTitle>
           </CardHeader>
           <CardContent>
             <CreateAssignmentForm groups={groups} />
