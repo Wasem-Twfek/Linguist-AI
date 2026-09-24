@@ -169,7 +169,3 @@ Experimental model-checking code exists for development purposes and should not 
 - Strengthen automated end-to-end coverage
 - Improve production deployment and observability
 - Continue refining the AI evaluation pipeline
-
-## License
-
-License information should be added here when the project license is finalized.
